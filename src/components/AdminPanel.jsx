@@ -22,7 +22,7 @@ export default function AdminPanel({ API_URL }) {
   const [servicios, setServicios] = useState([]);
   const [barberos, setBarberos] = useState([]);
   const [newService, setNewService] = useState({ nombre: '', duracion: '', precio: '' });
-  const [newBarber, setNewBarber] = useState({ nombre: '', especialidad: '', fotoUrl: '' });
+  const [newBarber, setNewBarber] = useState({ nombre: '', especialidad: '', fotoUrl: '', horaInicio: '10', horaFin: '20' });
 
   const [editingBarber, setEditingBarber] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -92,7 +92,6 @@ export default function AdminPanel({ API_URL }) {
     setWeeks(weeksArray);
   };
 
-  // ─── AGREGAR SERVICIO ───
   const handleAddServicio = async () => {
     if (!newService.nombre.trim() || !newService.duracion || !newService.precio) {
       setSuccessModal({ title: '⚠️ Campos incompletos', message: 'Completá todos los campos.', icon: 'warning' }); return;
@@ -116,17 +115,16 @@ export default function AdminPanel({ API_URL }) {
     } catch (e) { console.error(e); }
   };
 
-  // ─── AGREGAR BARBERO (CON URL MANUAL) ───
   const handleAddBarbero = async () => {
     if (!newBarber.nombre.trim()) {
       setSuccessModal({ title: '⚠️ Campo incompleto', message: 'El nombre es obligatorio.', icon: 'warning' }); return;
     }
     try {
-      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'addBarbero', nombre: newBarber.nombre, especialidad: newBarber.especialidad, fotoUrl: newBarber.fotoUrl }) });
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'addBarbero', nombre: newBarber.nombre, especialidad: newBarber.especialidad, fotoUrl: newBarber.fotoUrl, horaInicio: newBarber.horaInicio, horaFin: newBarber.horaFin }) });
       const data = await res.json();
       if (data.success) {
         setSuccessModal({ title: '✅ Agregado', message: `Barbero "${newBarber.nombre}" guardado.`, icon: 'success' });
-        setNewBarber({ nombre: '', especialidad: '', fotoUrl: '' });
+        setNewBarber({ nombre: '', especialidad: '', fotoUrl: '', horaInicio: '10', horaFin: '20' });
         fetchBarberos();
       } else { setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' }); }
     } catch (error) { setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' }); }
@@ -141,13 +139,12 @@ export default function AdminPanel({ API_URL }) {
     } catch (e) { console.error(e); }
   };
 
-  // ─── EDITAR BARBERO (CON URL MANUAL) ───
   const handleEditBarbero = async () => {
     if (!editingBarber.nombre.trim()) {
       setSuccessModal({ title: '⚠️ Campo incompleto', message: 'El nombre es obligatorio.', icon: 'warning' }); return;
     }
     try {
-      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateBarbero', id: editingBarber.id, nombre: editingBarber.nombre, especialidad: editingBarber.especialidad, fotoUrl: editingBarber.fotoUrl }) });
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateBarbero', id: editingBarber.id, nombre: editingBarber.nombre, especialidad: editingBarber.especialidad, fotoUrl: editingBarber.fotoUrl, horaInicio: editingBarber.horaInicio, horaFin: editingBarber.horaFin }) });
       const data = await res.json();
       if (data.success) {
         setSuccessModal({ title: '✅ Actualizado', message: `Barbero "${editingBarber.nombre}" actualizado.`, icon: 'success' });
@@ -157,7 +154,34 @@ export default function AdminPanel({ API_URL }) {
     } catch (error) { setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' }); }
   };
 
-  // ─── FUNCIONES DE TURNOS ───
+  const agregarTurnosNuevosBarberos = async () => {
+    setConfirmModal({ 
+      title: '➕ Agregar turnos para nuevos barberos', 
+      message: 'Esto agregará turnos solo para los barberos que no tienen turnos creados. Los turnos existentes NO serán modificados. ¿Continuar?', 
+      icon: 'confirm', 
+      onConfirm: async () => {
+        setLoading(true); setConfirmModal(null);
+        try {
+          const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'agregarTurnosNuevos' }) });
+          const data = await res.json();
+          if (data.success) {
+            if (data.total === 0) {
+              setSuccessModal({ title: 'ℹ️ Sin cambios', message: data.message, icon: 'warning' });
+            } else {
+              setSuccessModal({ title: '✅ Turnos agregados', message: data.message, icon: 'success' });
+            }
+            fetchTurnos();
+          } else {
+            setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' });
+          }
+        } catch (e) {
+          setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' });
+        }
+        setLoading(false);
+      }
+    });
+  };
+
   const toggleDay = (fecha) => setExpandedDays(prev => ({ ...prev, [fecha]: !prev[fecha] }));
   const expandAllWeek = () => { const f = weeks[weekOffset] || []; const n = { ...expandedDays }; f.forEach(x => n[x] = true); setExpandedDays(n); };
   const collapseAll = () => setExpandedDays({});
@@ -226,7 +250,7 @@ export default function AdminPanel({ API_URL }) {
     }});
   };
 
-  const getWhatsAppMessage = (t) => `Hola ${t.nombre}! 👋\n\nTurno confirmado en *The Barber Cut* ✂️\n👨‍🎨 ${t.barbero}\n💇 ${t.servicio || 'Servicio'}\n📅 ${getDayName(t.fecha)} ${formatDate(t.fecha)}\n🕐 ${t.horario}\n\n¡Te esperamos!`;
+  const getWhatsAppMessage = (t) => `Hola ${t.nombre}! 👋\n\nTurno confirmado en *The Barber* ✂️\n👨‍🎨 ${t.barbero}\n💇 ${t.servicio || 'Servicio'}\n📅 ${getDayName(t.fecha)} ${formatDate(t.fecha)}\n🕐 ${t.horario}\n\n¡Te esperamos!`;
   const normalizePhone = (p) => { const c = p.replace(/\D/g, ''); return c.length <= 10 ? `54${c}` : c; };
   const handleWhatsApp = () => { if (!contactModal) return; window.open(`https://wa.me/${normalizePhone(contactModal.turno.telefono)}?text=${encodeURIComponent(getWhatsAppMessage(contactModal.turno))}`, '_blank'); setContactModal(null); };
   const handleCall = () => { if (!contactModal) return; window.location.href = `tel:${contactModal.turno.telefono}`; setContactModal(null); };
@@ -298,6 +322,17 @@ export default function AdminPanel({ API_URL }) {
               </div>
             </div>
             <button className="btn-generar" onClick={handleGenerar} disabled={loading}>{loading ? 'Generando...' : '🔄 Generar Turnos'}</button>
+            <button 
+              className="btn-generar" 
+              style={{ background: 'linear-gradient(135deg, #2196f3, #1976d2)', marginTop: '10px' }}
+              onClick={agregarTurnosNuevosBarberos} 
+              disabled={loading}
+            >
+              {loading ? 'Procesando...' : '➕ Agregar turnos para nuevos barberos'}
+            </button>
+            <p className="hint" style={{ marginTop: '10px', color: '#888', fontSize: '0.85rem' }}>
+              💡 Este botón agrega turnos SOLO para los barberos que no los tienen, sin borrar los existentes.
+            </p>
           </div>
 
           <div className="filters">
@@ -406,6 +441,29 @@ export default function AdminPanel({ API_URL }) {
             <input placeholder="Nombre" value={newBarber.nombre} onChange={e => setNewBarber({...newBarber, nombre: e.target.value})} />
             <input placeholder="Especialidad (ej: Degradados)" value={newBarber.especialidad} onChange={e => setNewBarber({...newBarber, especialidad: e.target.value})} />
             <input placeholder="URL de foto (Google Drive)" value={newBarber.fotoUrl} onChange={e => setNewBarber({...newBarber, fotoUrl: e.target.value})} />
+            
+            <div className="horario-barbero">
+              <label>Horario de trabajo:</label>
+              <div className="horario-inputs">
+                <div>
+                  <label className="field-label">Desde</label>
+                  <select value={newBarber.horaInicio} onChange={e => setNewBarber({...newBarber, horaInicio: e.target.value})}>
+                    {Array.from({length: 14}, (_, i) => i + 8).map(h => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Hasta</label>
+                  <select value={newBarber.horaFin} onChange={e => setNewBarber({...newBarber, horaFin: e.target.value})}>
+                    {Array.from({length: 14}, (_, i) => i + 8).map(h => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            
             <button className="btn-add" onClick={handleAddBarbero}>+ Agregar</button>
           </div>
           <div className="management-list">
@@ -416,6 +474,7 @@ export default function AdminPanel({ API_URL }) {
                   <div>
                     <strong>{b.nombre}</strong>
                     <span>{b.especialidad}</span>
+                    <span className="horario-tag">🕐 {b.horaInicio}:00 - {b.horaFin}:00</span>
                   </div>
                 </div>
                 <div className="item-actions">
@@ -447,6 +506,27 @@ export default function AdminPanel({ API_URL }) {
               <div className="edit-field">
                 <label>URL de foto (Google Drive):</label>
                 <input value={editingBarber.fotoUrl || ''} onChange={e => setEditingBarber({...editingBarber, fotoUrl: e.target.value})} placeholder="https://lh3.googleusercontent.com/d/..." />
+              </div>
+              <div className="edit-field">
+                <label>Horario de trabajo:</label>
+                <div className="horario-inputs">
+                  <div>
+                    <label className="field-label">Desde</label>
+                    <select value={editingBarber.horaInicio || '10'} onChange={e => setEditingBarber({...editingBarber, horaInicio: e.target.value})}>
+                      {Array.from({length: 14}, (_, i) => i + 8).map(h => (
+                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Hasta</label>
+                    <select value={editingBarber.horaFin || '20'} onChange={e => setEditingBarber({...editingBarber, horaFin: e.target.value})}>
+                      {Array.from({length: 14}, (_, i) => i + 8).map(h => (
+                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="modal-actions-edit">

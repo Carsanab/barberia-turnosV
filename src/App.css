@@ -1900,3 +1900,68 @@ body {
     font-size: 1.1rem;
   }
 }
+
+/* ═══════════════════════════════════════════
+   HORARIOS DE BARBEROS
+   ═══════════════════════════════════════════ */
+.horario-barbero {
+  background: #0d0d0d;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  padding: 15px;
+}
+
+.horario-barbero > label {
+  display: block;
+  color: #aaa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.horario-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.horario-inputs > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.horario-inputs select {
+  padding: 12px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.horario-inputs select:focus {
+  outline: none;
+  border-color: #e94560;
+  background: #16213e;
+}
+
+.horario-tag {
+  display: inline-block;
+  background: rgba(79, 140, 255, 0.15);
+  color: #4f8cff;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .horario-inputs {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
