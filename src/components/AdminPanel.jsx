@@ -27,6 +27,13 @@ export default function AdminPanel({ API_URL }) {
   const [editingBarber, setEditingBarber] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // ─── ESTADO DE IMÁGENES ───
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [editSelectedImage, setEditSelectedImage] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   useEffect(() => { fetchTurnos(); fetchConfig(); fetchServicios(); fetchBarberos(); }, []);
   useEffect(() => { generateWeeks(); }, [turnos, weekOffset]);
 
@@ -92,6 +99,93 @@ export default function AdminPanel({ API_URL }) {
     setWeeks(weeksArray);
   };
 
+  // ═══════════════════════════════════════════
+  //  COMPRESIÓN DE IMAGEN
+  // ═══════════════════════════════════════════
+  const comprimirImagen = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 600;
+          const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * escala);
+          canvas.height = Math.round(img.height * escala);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // ═══════════════════════════════════════════
+  //  CONVERSOR DE URL DE DRIVE
+  // ═══════════════════════════════════════════
+  const convertirUrlDrive = (url) => {
+    if (!url) return '';
+    if (url.includes('uc?export=view')) return url;
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return 'https://drive.google.com/uc?export=view&id=' + match[1];
+    const match2 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match2) return 'https://drive.google.com/uc?export=view&id=' + match2[1];
+    return url;
+  };
+
+  // ─── SELECCIÓN DE IMAGEN ───
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setSuccessModal({ title: '⚠️ Archivo no válido', message: 'Solo se permiten imágenes.', icon: 'warning' });
+      e.target.value = ''; return;
+    }
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setSuccessModal({ title: '⚠️ Archivo no válido', message: 'Solo se permiten imágenes.', icon: 'warning' });
+      e.target.value = ''; return;
+    }
+    setEditSelectedImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setEditImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const limpiarImagenAdd = () => {
+    setSelectedImage(null); setImagePreview(null);
+    ['barber-cam-add', 'barber-gal-add'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  };
+  const limpiarImagenEdit = () => {
+    setEditSelectedImage(null); setEditImagePreview(null);
+    ['barber-cam-edit', 'barber-gal-edit'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  };
+
+  const subirImagen = async (file, nombreBarbero) => {
+    const base64 = await comprimirImagen(file);
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'subirImagen', imagen: base64, nombreArchivo: `barbero_${nombreBarbero.replace(/\s+/g, '_')}_${Date.now()}.jpg` })
+    });
+    return res.json();
+  };
+
+  // ═══════════════════════════════════════════
+  //  SERVICIOS
+  // ═══════════════════════════════════════════
   const handleAddServicio = async () => {
     if (!newService.nombre.trim() || !newService.duracion || !newService.precio) {
       setSuccessModal({ title: '⚠️ Campos incompletos', message: 'Completá todos los campos.', icon: 'warning' }); return;
@@ -115,19 +209,34 @@ export default function AdminPanel({ API_URL }) {
     } catch (e) { console.error(e); }
   };
 
+  // ═══════════════════════════════════════════
+  //  BARBEROS
+  // ═══════════════════════════════════════════
   const handleAddBarbero = async () => {
     if (!newBarber.nombre.trim()) {
       setSuccessModal({ title: '⚠️ Campo incompleto', message: 'El nombre es obligatorio.', icon: 'warning' }); return;
     }
+    setIsUploading(true);
+    let finalFotoUrl = newBarber.fotoUrl.trim();
     try {
-      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'addBarbero', nombre: newBarber.nombre, especialidad: newBarber.especialidad, fotoUrl: newBarber.fotoUrl, horaInicio: newBarber.horaInicio, horaFin: newBarber.horaFin }) });
+      if (selectedImage) {
+        const uploadData = await subirImagen(selectedImage, newBarber.nombre);
+        if (uploadData.success) { finalFotoUrl = uploadData.url; }
+        else {
+          setSuccessModal({ title: '❌ Error al subir foto', message: uploadData.error || 'El script no tiene permiso de Drive.', icon: 'error' });
+          setIsUploading(false); return;
+        }
+      }
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'addBarbero', nombre: newBarber.nombre, especialidad: newBarber.especialidad, fotoUrl: finalFotoUrl, horaInicio: newBarber.horaInicio, horaFin: newBarber.horaFin }) });
       const data = await res.json();
       if (data.success) {
         setSuccessModal({ title: '✅ Agregado', message: `Barbero "${newBarber.nombre}" guardado.`, icon: 'success' });
         setNewBarber({ nombre: '', especialidad: '', fotoUrl: '', horaInicio: '10', horaFin: '20' });
+        limpiarImagenAdd();
         fetchBarberos();
       } else { setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' }); }
     } catch (error) { setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' }); }
+    finally { setIsUploading(false); }
   };
 
   const handleDeleteBarbero = async (id) => {
@@ -143,15 +252,26 @@ export default function AdminPanel({ API_URL }) {
     if (!editingBarber.nombre.trim()) {
       setSuccessModal({ title: '⚠️ Campo incompleto', message: 'El nombre es obligatorio.', icon: 'warning' }); return;
     }
+    setIsUploading(true);
+    let finalFotoUrl = editingBarber.fotoUrl || '';
     try {
-      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateBarbero', id: editingBarber.id, nombre: editingBarber.nombre, especialidad: editingBarber.especialidad, fotoUrl: editingBarber.fotoUrl, horaInicio: editingBarber.horaInicio, horaFin: editingBarber.horaFin }) });
+      if (editSelectedImage) {
+        const uploadData = await subirImagen(editSelectedImage, editingBarber.nombre);
+        if (uploadData.success) { finalFotoUrl = uploadData.url; }
+        else {
+          setSuccessModal({ title: '❌ Error al subir foto', message: uploadData.error || 'El script no tiene permiso de Drive.', icon: 'error' });
+          setIsUploading(false); return;
+        }
+      }
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateBarbero', id: editingBarber.id, nombre: editingBarber.nombre, especialidad: editingBarber.especialidad, fotoUrl: finalFotoUrl, horaInicio: editingBarber.horaInicio, horaFin: editingBarber.horaFin }) });
       const data = await res.json();
       if (data.success) {
         setSuccessModal({ title: '✅ Actualizado', message: `Barbero "${editingBarber.nombre}" actualizado.`, icon: 'success' });
-        setShowEditModal(false); setEditingBarber(null);
+        setShowEditModal(false); setEditingBarber(null); limpiarImagenEdit();
         fetchBarberos();
       } else { setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' }); }
     } catch (error) { setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' }); }
+    finally { setIsUploading(false); }
   };
 
   const agregarTurnosNuevosBarberos = async () => {
@@ -165,23 +285,19 @@ export default function AdminPanel({ API_URL }) {
           const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'agregarTurnosNuevos' }) });
           const data = await res.json();
           if (data.success) {
-            if (data.total === 0) {
-              setSuccessModal({ title: 'ℹ️ Sin cambios', message: data.message, icon: 'warning' });
-            } else {
-              setSuccessModal({ title: '✅ Turnos agregados', message: data.message, icon: 'success' });
-            }
+            if (data.total === 0) setSuccessModal({ title: 'ℹ️ Sin cambios', message: data.message, icon: 'warning' });
+            else setSuccessModal({ title: '✅ Turnos agregados', message: data.message, icon: 'success' });
             fetchTurnos();
-          } else {
-            setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' });
-          }
-        } catch (e) {
-          setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' });
-        }
+          } else setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' });
+        } catch (e) { setSuccessModal({ title: '❌ Error', message: 'No se pudo conectar.', icon: 'error' }); }
         setLoading(false);
       }
     });
   };
 
+  // ═══════════════════════════════════════════
+  //  TURNOS
+  // ═══════════════════════════════════════════
   const toggleDay = (fecha) => setExpandedDays(prev => ({ ...prev, [fecha]: !prev[fecha] }));
   const expandAllWeek = () => { const f = weeks[weekOffset] || []; const n = { ...expandedDays }; f.forEach(x => n[x] = true); setExpandedDays(n); };
   const collapseAll = () => setExpandedDays({});
@@ -211,7 +327,7 @@ export default function AdminPanel({ API_URL }) {
     setConfirmModal({ title: '⚠️ Generar Turnos', message: 'Esto borrará los turnos existentes y generará nuevos.', icon: 'warning', onConfirm: async () => {
       setLoading(true); setConfirmModal(null);
       await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateConfig', fechaHasta: config.fechaHasta, diasHabilitados: config.diasHabilitados }) });
-      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'generarDesdeConfig', fechaHasta: config.fechaHasta, diasHabilitados: config.diasHabilitados }) });
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'generarDesdeConfig' }) });
       const data = await res.json();
       if (data.success) { setSuccessModal({ title: '✅ Completado', message: data.message, icon: 'success' }); fetchTurnos(); }
       else { setSuccessModal({ title: '❌ Error', message: data.error, icon: 'error' }); }
@@ -250,7 +366,7 @@ export default function AdminPanel({ API_URL }) {
     }});
   };
 
-  const getWhatsAppMessage = (t) => `Hola ${t.nombre}! 👋\n\nTurno confirmado en *The Barber* ✂️\n👨‍🎨 ${t.barbero}\n💇 ${t.servicio || 'Servicio'}\n📅 ${getDayName(t.fecha)} ${formatDate(t.fecha)}\n🕐 ${t.horario}\n\n¡Te esperamos!`;
+  const getWhatsAppMessage = (t) => `Hola ${t.nombre}! 👋\n\nTurno confirmado en *The Barber Cut* ✂️\n👨‍🎨 ${t.barbero}\n💇 ${t.servicio || 'Servicio'}\n📅 ${getDayName(t.fecha)} ${formatDate(t.fecha)}\n🕐 ${t.horario}\n\n¡Te esperamos!`;
   const normalizePhone = (p) => { const c = p.replace(/\D/g, ''); return c.length <= 10 ? `54${c}` : c; };
   const handleWhatsApp = () => { if (!contactModal) return; window.open(`https://wa.me/${normalizePhone(contactModal.turno.telefono)}?text=${encodeURIComponent(getWhatsAppMessage(contactModal.turno))}`, '_blank'); setContactModal(null); };
   const handleCall = () => { if (!contactModal) return; window.location.href = `tel:${contactModal.turno.telefono}`; setContactModal(null); };
@@ -276,6 +392,8 @@ export default function AdminPanel({ API_URL }) {
   const currentWeekFechas = weeks[weekOffset] || [];
   const gruposSemana = agruparPorFecha(turnosFiltrados.filter(t => currentWeekFechas.includes(t.fecha)));
   const getDaySummary = (fecha) => { const delDia = turnos.filter(t => t.fecha === fecha); return { total: delDia.length, reservados: delDia.filter(t => t.nombre).length, pendientes: delDia.filter(t => t.nombre && !t.confirmado).length, confirmados: delDia.filter(t => t.confirmado).length }; };
+
+  const horasOpciones = Array.from({ length: 14 }, (_, i) => i + 8);
 
   return (
     <div className="admin-panel">
@@ -322,17 +440,10 @@ export default function AdminPanel({ API_URL }) {
               </div>
             </div>
             <button className="btn-generar" onClick={handleGenerar} disabled={loading}>{loading ? 'Generando...' : '🔄 Generar Turnos'}</button>
-            <button 
-              className="btn-generar" 
-              style={{ background: 'linear-gradient(135deg, #2196f3, #1976d2)', marginTop: '10px' }}
-              onClick={agregarTurnosNuevosBarberos} 
-              disabled={loading}
-            >
+            <button className="btn-generar btn-generar-azul" onClick={agregarTurnosNuevosBarberos} disabled={loading}>
               {loading ? 'Procesando...' : '➕ Agregar turnos para nuevos barberos'}
             </button>
-            <p className="hint" style={{ marginTop: '10px', color: '#888', fontSize: '0.85rem' }}>
-              💡 Este botón agrega turnos SOLO para los barberos que no los tienen, sin borrar los existentes.
-            </p>
+            <p className="hint">💡 El botón azul agrega turnos SOLO para barberos nuevos, sin borrar los existentes.</p>
           </div>
 
           <div className="filters">
@@ -440,7 +551,6 @@ export default function AdminPanel({ API_URL }) {
           <div className="add-form">
             <input placeholder="Nombre" value={newBarber.nombre} onChange={e => setNewBarber({...newBarber, nombre: e.target.value})} />
             <input placeholder="Especialidad (ej: Degradados)" value={newBarber.especialidad} onChange={e => setNewBarber({...newBarber, especialidad: e.target.value})} />
-            <input placeholder="URL de foto (Google Drive)" value={newBarber.fotoUrl} onChange={e => setNewBarber({...newBarber, fotoUrl: e.target.value})} />
             
             <div className="horario-barbero">
               <label>Horario de trabajo:</label>
@@ -448,29 +558,61 @@ export default function AdminPanel({ API_URL }) {
                 <div>
                   <label className="field-label">Desde</label>
                   <select value={newBarber.horaInicio} onChange={e => setNewBarber({...newBarber, horaInicio: e.target.value})}>
-                    {Array.from({length: 14}, (_, i) => i + 8).map(h => (
-                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
-                    ))}
+                    {horasOpciones.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="field-label">Hasta</label>
                   <select value={newBarber.horaFin} onChange={e => setNewBarber({...newBarber, horaFin: e.target.value})}>
-                    {Array.from({length: 14}, (_, i) => i + 8).map(h => (
-                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
-                    ))}
+                    {horasOpciones.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
                   </select>
                 </div>
               </div>
             </div>
+
+            <div className="image-upload-container">
+              {imagePreview ? (
+                <div className="image-preview-wrapper">
+                  <img src={imagePreview} alt="Vista previa" className="image-preview" />
+                  <button type="button" className="btn-remove-image" onClick={limpiarImagenAdd} title="Quitar imagen">✕</button>
+                </div>
+              ) : (
+                <div className="image-placeholder">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span>Sin foto (opcional)</span>
+                  <span className="image-size-hint">Se comprime automáticamente</span>
+                </div>
+              )}
+              <div className="image-upload-buttons">
+                <label className="btn-select-image btn-camera">
+                  📷 Tomar Foto
+                  <input id="barber-cam-add" type="file" accept="image/*" capture="environment" onChange={handleImageChange} style={{ display: 'none' }} />
+                </label>
+                <label className="btn-select-image btn-gallery">
+                  🖼️ Galería
+                  <input id="barber-gal-add" type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
+                </label>
+              </div>
+            </div>
+
+            <input placeholder="O pegá una URL de foto (Drive)" value={newBarber.fotoUrl} onChange={e => setNewBarber({...newBarber, fotoUrl: e.target.value})} />
             
-            <button className="btn-add" onClick={handleAddBarbero}>+ Agregar</button>
+            <button className="btn-add" onClick={handleAddBarbero} disabled={isUploading}>
+              {isUploading ? '⏳ Subiendo foto...' : '+ Agregar Barbero'}
+            </button>
           </div>
           <div className="management-list">
             {barberos.map(b => (
               <div key={b.id} className="management-item">
                 <div className="item-info barber-info">
-                  {b.fotoUrl ? <img src={b.fotoUrl} alt={b.nombre} className="mini-avatar" /> : <div className="mini-avatar empty">{b.nombre.charAt(0)}</div>}
+                  {b.fotoUrl ? (
+                    <img 
+                      src={convertirUrlDrive(b.fotoUrl)} 
+                      alt={b.nombre} 
+                      className="mini-avatar"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : <div className="mini-avatar empty">{b.nombre.charAt(0)}</div>}
                   <div>
                     <strong>{b.nombre}</strong>
                     <span>{b.especialidad}</span>
@@ -478,7 +620,7 @@ export default function AdminPanel({ API_URL }) {
                   </div>
                 </div>
                 <div className="item-actions">
-                  <button className="btn-edit-item" onClick={() => { setEditingBarber({...b}); setShowEditModal(true); }} title="Editar barbero">✏️</button>
+                  <button className="btn-edit-item" onClick={() => { setEditingBarber({...b}); setShowEditModal(true); limpiarImagenEdit(); }} title="Editar barbero">✏️</button>
                   <button className="btn-delete-item" onClick={() => handleDeleteBarbero(b.id)}>🗑️</button>
                 </div>
               </div>
@@ -497,15 +639,11 @@ export default function AdminPanel({ API_URL }) {
             <div className="edit-form">
               <div className="edit-field">
                 <label>Nombre:</label>
-                <input value={editingBarber.nombre} onChange={e => setEditingBarber({...editingBarber, nombre: e.target.value})} placeholder="Nombre del barbero" />
+                <input value={editingBarber.nombre} onChange={e => setEditingBarber({...editingBarber, nombre: e.target.value})} />
               </div>
               <div className="edit-field">
                 <label>Especialidad:</label>
-                <input value={editingBarber.especialidad} onChange={e => setEditingBarber({...editingBarber, especialidad: e.target.value})} placeholder="Ej: Degradados, Barba, etc." />
-              </div>
-              <div className="edit-field">
-                <label>URL de foto (Google Drive):</label>
-                <input value={editingBarber.fotoUrl || ''} onChange={e => setEditingBarber({...editingBarber, fotoUrl: e.target.value})} placeholder="https://lh3.googleusercontent.com/d/..." />
+                <input value={editingBarber.especialidad} onChange={e => setEditingBarber({...editingBarber, especialidad: e.target.value})} />
               </div>
               <div className="edit-field">
                 <label>Horario de trabajo:</label>
@@ -513,25 +651,59 @@ export default function AdminPanel({ API_URL }) {
                   <div>
                     <label className="field-label">Desde</label>
                     <select value={editingBarber.horaInicio || '10'} onChange={e => setEditingBarber({...editingBarber, horaInicio: e.target.value})}>
-                      {Array.from({length: 14}, (_, i) => i + 8).map(h => (
-                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
-                      ))}
+                      {horasOpciones.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="field-label">Hasta</label>
                     <select value={editingBarber.horaFin || '20'} onChange={e => setEditingBarber({...editingBarber, horaFin: e.target.value})}>
-                      {Array.from({length: 14}, (_, i) => i + 8).map(h => (
-                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
-                      ))}
+                      {horasOpciones.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>)}
                     </select>
+                  </div>
+                </div>
+              </div>
+              <div className="edit-field">
+                <label>Foto actual:</label>
+                <div className="current-image-preview">
+                  {editingBarber.fotoUrl ? (
+                    <img 
+                      src={convertirUrlDrive(editingBarber.fotoUrl)} 
+                      alt="Foto actual" 
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : <div className="no-image"><span>Sin foto</span></div>}
+                </div>
+              </div>
+              <div className="edit-field">
+                <label>Nueva foto (opcional):</label>
+                <div className="image-upload-container edit-upload">
+                  {editImagePreview ? (
+                    <div className="image-preview-wrapper">
+                      <img src={editImagePreview} alt="Nueva foto" className="image-preview" />
+                      <button type="button" className="btn-remove-image" onClick={limpiarImagenEdit} title="Quitar nueva foto">✕</button>
+                    </div>
+                  ) : (
+                    <div className="image-placeholder">
+                      <span>Sin nueva foto seleccionada</span>
+                      <span className="image-size-hint">Si no elegís una, se mantiene la actual</span>
+                    </div>
+                  )}
+                  <div className="image-upload-buttons">
+                    <label className="btn-select-image btn-camera">
+                      📷 Tomar Foto
+                      <input id="barber-cam-edit" type="file" accept="image/*" capture="environment" onChange={handleEditImageChange} style={{ display: 'none' }} />
+                    </label>
+                    <label className="btn-select-image btn-gallery">
+                      🖼️ Galería
+                      <input id="barber-gal-edit" type="file" accept="image/*" onChange={handleEditImageChange} style={{ display: 'none' }} />
+                    </label>
                   </div>
                 </div>
               </div>
             </div>
             <div className="modal-actions-edit">
               <button className="btn-cancel-edit" onClick={() => setShowEditModal(false)}>Cancelar</button>
-              <button className="btn-save-edit" onClick={handleEditBarbero}>💾 Guardar Cambios</button>
+              <button className="btn-save-edit" onClick={handleEditBarbero} disabled={isUploading}>{isUploading ? '⏳ Guardando...' : '💾 Guardar Cambios'}</button>
             </div>
           </div>
         </div>

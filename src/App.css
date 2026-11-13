@@ -1939,13 +1939,11 @@ body {
   color: #fff;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.3s;
 }
 
 .horario-inputs select:focus {
   outline: none;
   border-color: #e94560;
-  background: #16213e;
 }
 
 .horario-tag {
@@ -1959,9 +1957,128 @@ body {
   margin-top: 4px;
 }
 
+.btn-generar-azul {
+  background: linear-gradient(135deg, #2196f3, #1976d2) !important;
+  margin-top: 10px;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 10px;
+}
+
+/* ═══════════════════════════════════════════
+   SUBIDA DE IMÁGENES
+   ═══════════════════════════════════════════ */
+.image-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  background: #1a1a2e;
+  border: 2px dashed #2a2a3e;
+  border-radius: 12px;
+  width: 100%;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 200px;
+}
+
+.image-preview {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid #e94560;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #f44336;
+  color: white;
+  border: 2px solid #1a1a2e;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.image-size-hint {
+  font-size: 0.75rem;
+  color: #666;
+  background: #0d0d0d;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a2a3e;
+}
+
+.image-upload-buttons {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.image-upload-buttons .btn-select-image {
+  flex: 1;
+  justify-content: center;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+}
+
+.btn-select-image {
+  color: white;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s;
+}
+
+.btn-camera {
+  background: linear-gradient(135deg, #e94560, #c23152);
+}
+
+.btn-gallery {
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+}
+
+.btn-select-image:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.no-image {
+  width: 100%;
+  padding: 25px;
+  background: #0d0d0d;
+  border: 2px dashed #2a2a3e;
+  border-radius: 10px;
+  text-align: center;
+  color: #666;
+}
+
 @media (max-width: 600px) {
-  .horario-inputs {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
+  .horario-inputs { grid-template-columns: 1fr; }
+  .image-upload-buttons { flex-direction: column; }
 }
