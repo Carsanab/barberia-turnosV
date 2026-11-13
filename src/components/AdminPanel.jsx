@@ -126,16 +126,24 @@ export default function AdminPanel({ API_URL }) {
   };
 
   // ═══════════════════════════════════════════
-  //  CONVERSOR DE URL DE DRIVE
+  //  CONVERSOR DE URL DE DRIVE (ACTUALIZADO)
   // ═══════════════════════════════════════════
+  const extraerIdDrive = (url) => {
+    if (!url) return '';
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
+    const m =
+      url.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+      url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+      url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : '';
+  };
+
   const convertirUrlDrive = (url) => {
     if (!url) return '';
-    if (url.includes('uc?export=view')) return url;
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) return 'https://drive.google.com/uc?export=view&id=' + match[1];
-    const match2 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (match2) return 'https://drive.google.com/uc?export=view&id=' + match2[1];
-    return url;
+    if (url.startsWith('data:')) return url;
+    const id = extraerIdDrive(url);
+    if (!id) return url;
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w600`;
   };
 
   // ─── SELECCIÓN DE IMAGEN ───
@@ -167,11 +175,13 @@ export default function AdminPanel({ API_URL }) {
 
   const limpiarImagenAdd = () => {
     setSelectedImage(null); setImagePreview(null);
-    ['barber-cam-add', 'barber-gal-add'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const el = document.getElementById('barber-gal-add');
+    if (el) el.value = '';
   };
   const limpiarImagenEdit = () => {
     setEditSelectedImage(null); setEditImagePreview(null);
-    ['barber-cam-edit', 'barber-gal-edit'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const el = document.getElementById('barber-gal-edit');
+    if (el) el.value = '';
   };
 
   const subirImagen = async (file, nombreBarbero) => {
@@ -584,10 +594,6 @@ export default function AdminPanel({ API_URL }) {
                 </div>
               )}
               <div className="image-upload-buttons">
-                <label className="btn-select-image btn-camera">
-                  📷 Tomar Foto
-                  <input id="barber-cam-add" type="file" accept="image/*" capture="environment" onChange={handleImageChange} style={{ display: 'none' }} />
-                </label>
                 <label className="btn-select-image btn-gallery">
                   🖼️ Galería
                   <input id="barber-gal-add" type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
@@ -689,10 +695,6 @@ export default function AdminPanel({ API_URL }) {
                     </div>
                   )}
                   <div className="image-upload-buttons">
-                    <label className="btn-select-image btn-camera">
-                      📷 Tomar Foto
-                      <input id="barber-cam-edit" type="file" accept="image/*" capture="environment" onChange={handleEditImageChange} style={{ display: 'none' }} />
-                    </label>
                     <label className="btn-select-image btn-gallery">
                       🖼️ Galería
                       <input id="barber-gal-edit" type="file" accept="image/*" onChange={handleEditImageChange} style={{ display: 'none' }} />
